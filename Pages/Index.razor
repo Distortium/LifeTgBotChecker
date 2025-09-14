@@ -1,0 +1,336 @@
+﻿@page "/"
+@using LifeTgBotChecker.Data
+@inject LifeCheckBotsService CheckerService
+@inject DataBase DB
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+
+<PageTitle>General</PageTitle>
+
+<h1 class="page-title">Life Check Tg Bots</h1>
+
+<table class="main-table">
+    <tbody>
+        <tr>
+            <td class="bots-column">
+                <div class="flex-container">
+                    @foreach (var bot in CheckerService.Bots)
+                    {
+                        <div class="flex-item">
+                            <div class="bot-info" style="background-color: @bot.Value.Color; width: 100%;">
+                                <span>@bot.Value.IsLife</span><br />
+                                <span>@bot.Value.Workload</span>
+                            </div>
+                            <button class="btn-del" @onclick="() => HandleDeleteBot(bot.Key)">del</button>
+                        </div>
+                    }
+                </div>
+            </td>
+            <td class="settings-column">
+                <div class="settings-container">
+                    <div class="setting-item">
+                        <p class="input-settings">Промежуток между проверками (мл. сек.)</p>
+                        <input @bind="CheckerService.KdMilliSecCheck" />
+                    </div>
+                    <div class="setting-item">
+                        <p class="input-settings">Получаемая длина очереди у ботов</p>
+                        <input @bind="CheckerService.MaxGetWorkloadFromBot" />
+                    </div>
+                    <div class="setting-item">
+                        <p class="input-settings">Максимальное количество действий бота в сек.</p>
+                        <input @bind="CheckerService.MaxAnswersInSecFromCheckerBot" />
+                    </div>
+                    <div class="setting-item">
+                        <p class="input-settings">Время до начала проверки после отправки сообщения (мл. сек.)</p>
+                        <input @bind="CheckerService.KdMilliSecCheckAfterSendMessage" />
+                    </div>
+                    <div class="setting-item">
+                        <p class="input-settings">Время до повторной проверки после первой (мл. сек.)</p>
+                        <input @bind="CheckerService.KdMilliSecCheckAfterFirstCheck" />
+                    </div>
+                    <div class="setting-item">
+                        <p class="input-settings">Токен проверяющего бота</p>
+                        <input @bind="CheckerService.TokenCheckerBot" type="password" />
+                    </div>
+                    <div class="settings-buttons">
+                        <button class="btn-action" @onclick="SaveInDataBase">Save</button>
+                        <button class="btn-action" @onclick="Backup">Backup</button>
+                    </div>
+                </div>
+            </td>
+        </tr>
+    </tbody>
+</table>
+
+<div class="fixed-bottom">
+    <input class="input-token" placeholder="Введите токен" @onkeydown="AddBotFromKeyboard" @bind="inputTokenBot" />
+    <button class="btn-add" @onclick="AddBot">Add</button>
+</div>
+
+@code{
+    private string inputTokenBot = "";
+
+    protected override void OnInitialized()
+    {
+        CheckerService.OnUpdateUIEvent += HandleChange;
+    }
+
+    private async Task HandleChange()
+    {
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private void HandleDeleteBot(string token)
+    {
+        CheckerService.RemoveBot(token);
+    }
+
+    public void Dispose()
+    {
+        CheckerService.OnUpdateUIEvent -= HandleChange;
+    }
+
+    private async Task HandlerCheckLife(MouseEventArgs args)
+    {
+        await CheckerService.CheckLifeBots();
+    }
+
+    private async Task Backup()
+    {
+        string url = Navigation.ToAbsoluteUri("api/filebackup").ToString();
+        await JS.InvokeVoidAsync("open", url, "_blank");
+    }
+
+    private async Task SaveInDataBase()
+    {
+        CheckerService.RefreshTokenCheckerBot();
+
+        var settings = await DB.GetSettings();
+        if (settings != null)
+        {
+            settings.TokenCheckerBot = CheckerService.TokenCheckerBot;
+            settings.MaxAnswersInSecFromCheckerBot = CheckerService.MaxAnswersInSecFromCheckerBot;
+            settings.MaxGetWorkloadFromBot = CheckerService.MaxGetWorkloadFromBot;
+            settings.KdMilliSecCheck = CheckerService.KdMilliSecCheck;
+            settings.KdMilliSecCheckAfterFirstCheck = CheckerService.KdMilliSecCheckAfterFirstCheck;
+            settings.KdMilliSecCheckAfterSendMessage = CheckerService.KdMilliSecCheckAfterSendMessage;
+        }
+        else
+        {
+            
+        }
+
+        await DB.Save();
+    }
+
+    private void AddBotFromKeyboard(KeyboardEventArgs key)
+    {
+        if (key.Key.Equals("Enter"))
+            AddBot();
+    }
+
+    private void AddBot()
+    {
+        if (!string.IsNullOrWhiteSpace(inputTokenBot))
+            CheckerService.AddBot(inputTokenBot);
+    }
+}
+
+<style>
+    /* Таблица для разметки */
+    .main-table {
+        width: 100%;
+        border-collapse: collapse;
+        table-layout: fixed;
+    }
+
+    .bots-column {
+        width: 73%;
+        vertical-align: top;
+        padding-right: 20px;
+    }
+
+    .settings-column {
+        width: 27%;
+        vertical-align: top;
+        padding-left: 20px;
+    }
+
+    /* Контейнер для ботов */
+    .flex-container {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 15px;
+    }
+
+    .flex-item {
+        flex: 1 1 60px;
+        min-width: 60px;
+        max-width: 100px;
+        background-color: white;
+        border-radius: 8px;
+        padding: 15px 10px;
+        box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        font-size: 0.9rem;
+        color: #111;
+        position: relative;
+    }
+
+    .bot-info {
+        margin-bottom: 10px;
+        text-align: center;
+        font-weight: 500;
+    }
+
+    .btn-del {
+        background-color: transparent;
+        border: 1px solid #c0392b;
+        color: #c0392b;
+        border-radius: 4px;
+        padding: 2px 8px;
+        font-size: 0.8rem;
+        cursor: pointer;
+        transition: background-color 0.2s ease, color 0.2s ease;
+    }
+
+        .btn-del:hover {
+            background-color: #c0392b;
+            color: white;
+        }
+
+    /* Настройки справа */
+    .settings-container {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 20px;
+    }
+
+    .settings-buttons {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 10px;
+        align-self: flex-end;
+    }
+
+    .btn-action {
+        background-color: #3498db;
+        border: none;
+        color: white;
+        padding: 6px 14px;
+        border-radius: 5px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background-color 0.3s ease;
+    }
+
+        .btn-action:hover {
+            background-color: #2980b9;
+        }
+
+    .setting-item {
+        width: 100%;
+        max-width: 280px;
+        text-align: right;
+    }
+
+    .input-settings {
+        margin: 0 0 5px 0;
+        font-size: 0.85rem;
+        color: #555;
+        user-select: none;
+    }
+
+    .setting-item input {
+        width: 100%;
+        padding: 6px 8px;
+        font-size: 0.9rem;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        box-sizing: border-box;
+        transition: border-color 0.3s ease;
+    }
+
+        .setting-item input:focus {
+            border-color: #3498db;
+            outline: none;
+            box-shadow: 0 0 5px rgba(52, 152, 219, 0.5);
+        }
+
+    /* Нижняя фиксированная панель */
+    .fixed-bottom {
+        position: fixed;
+        bottom: 10px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 95%;
+        max-width: 700px;
+        display: flex;
+        gap: 10px;
+        background-color: #fff;
+        padding: 10px 15px;
+        border-radius: 8px;
+        box-shadow: 0 3px 10px rgba(0,0,0,0.12);
+        box-sizing: border-box;
+        z-index: 1000;
+    }
+
+    .input-token {
+        flex-grow: 1;
+        padding: 8px 12px;
+        font-size: 1rem;
+        border: 1px solid #ccc;
+        border-radius: 5px;
+        transition: border-color 0.3s ease;
+    }
+
+        .input-token:focus {
+            border-color: #3498db;
+            outline: none;
+            box-shadow: 0 0 5px rgba(52, 152, 219, 0.5);
+        }
+
+    .btn-add {
+        background-color: #27ae60;
+        border: none;
+        color: white;
+        padding: 8px 14px;
+        border-radius: 5px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background-color 0.3s ease;
+        min-width: 70px;
+    }
+
+        .btn-add:hover {
+            background-color: #1e8449;
+        }
+
+    .bots-column, .settings-column {
+        width: 100%;
+        padding: 0;
+    }
+
+    .settings-container {
+        align-items: stretch;
+    }
+
+    .setting-item {
+        text-align: left;
+        max-width: 100%;
+    }
+
+    .fixed-bottom {
+        flex-direction: column;
+        gap: 8px;
+        padding: 12px;
+    }
+
+    .btn-add {
+        width: 100%;
+        min-width: unset;
+    }
+</style>
