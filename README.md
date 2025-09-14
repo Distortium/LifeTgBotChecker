@@ -4,6 +4,8 @@ Collects statistics on tg bots (whether online and queue load)
 
 ## En / Английский 🇬🇧
 
+To start working with this service, select a bot that will check other bots, then add them all to one telegram channel, launch the application, write the token of the checking bot to the parameters, save it and write the command "/start" to the chat channel. Each restart of the application after that will require writing the "/start" message to the chat channels where the check is performed.
+
 Parameters:
 - The interval between checks (ml. sec.) <br>The time of the call between the main method of checking all bots
 - The resulting queue length for bots <br>The maximum possible queue length received from bots for verification (greatly affects the speed because this operation is waiting for a response from the telegram API)
@@ -28,6 +30,8 @@ API:
   - workload_bot {bot_id} (gauge) Bot load
 
 ## Ru / Русский 🇷🇺
+
+Для начала работы данного сервиса, выделите бота который будет проверять других ботов, после чего добавтье всех в один телеграм канал, запустите приложение, напишите в параметры токен проверяющего бота, сохраните и в чат канала напишите команду "/start". Каждый перезапуск приложения после будет требовать написания сообщения "/start" в чат каналов где совершается проверка
 
 Параметры:
 - Промежуток между проверками (мл. сек.) <br>Время вызова между основного метода проверки всех ботов
