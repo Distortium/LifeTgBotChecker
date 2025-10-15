@@ -16,11 +16,31 @@ namespace LifeTgBotChecker
             builder.Services.AddSingleton<LifeCheckBotsService>();
 
             builder.Services.AddDbContext<DataBase>(options =>
-                options.UseSqlite("Data Source=LifeCheckDataBase.db"));
+                options.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection")));
 
             builder.Services.AddControllers();
 
             var app = builder.Build();
+
+            // Initialize database on startup
+            using (var scope = app.Services.CreateScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<DataBase>();
+                try
+                {
+                    // Принудительно создаем базу данных если ее нет
+                    var created = db.Database.EnsureCreated();
+                    Console.WriteLine($"Database ensured created on startup: {created}");
+
+                    // Проверяем соединение
+                    var canConnect = db.Database.CanConnect();
+                    Console.WriteLine($"Database can connect: {canConnect}");
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Database initialization failed: {ex.Message}");
+                }
+            }
 
             // Configure the HTTP request pipeline.
             if (!app.Environment.IsDevelopment())

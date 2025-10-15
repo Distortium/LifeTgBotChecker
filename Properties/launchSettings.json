@@ -32,7 +32,8 @@
       "environmentVariables": {
         "ASPNETCORE_URLS": "https://+:443;http://+:80"
       },
-      "publishAllPorts": true,
+      "httpPort": 32775,
+      "sslPort": 7050,
       "useSSL": true
     }
   },

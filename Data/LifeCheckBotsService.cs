@@ -60,16 +60,31 @@ namespace LifeTgBotChecker.Data
             }
         }
 
-        public void AddBot(string token)
+        public async void AddBot(string token, string? name = null)
         {
             if (!string.IsNullOrWhiteSpace(token) && !Bots.ContainsKey(token))
             {
-                Bots.Add(token, new Bot(token));
+                TelegramBotClient botClient;
+                if (name == null)
+                {
+                    name = "Бот";
+                    try
+                    {
+                        botClient = new TelegramBotClient(token);
+                        var me = await botClient.GetMe();
+                        if (me.Username != null)
+                            name = me.Username;
+                    }
+                    catch { }
+                }
+                
+                var bot = new Bot(token, name);
+                Bots.Add(token, bot);
                 OnUpdateUIEvent?.Invoke();
 
                 if (DB == null)
                     Console.WriteLine($"Added bot with token {token}");
-                DB?.AddBot(token);
+                DB?.AddBot(token, name);
             }
         }
 
@@ -284,7 +299,7 @@ namespace LifeTgBotChecker.Data
         private void LoadBots(IEnumerable<BotInDataBase> bots)
         {
             foreach (var bot in bots)
-                Bots.Add(bot.Token, new Bot(bot.Token));
+                Bots.Add(bot.Token, new Bot(bot.Token, bot.Name));
         }
 
         // Загрузка настроек из БД

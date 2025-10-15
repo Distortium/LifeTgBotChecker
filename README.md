@@ -26,8 +26,7 @@ API:
   - all_count_bots (counter) Total bots
   - count_active_bots (counter) Number of active bots
   - average_workload_bots (counter) Average bot load
-  - active_bot {bot_id} (gauge) Is the bot active (1 = active, 0 = inactive)
-  - workload_bot {bot_id} (gauge) Bot load
+  - active_bot {bot_id, name_bot, workload_bot} (gauge) Is the bot active (1 = active, 0 = inactive)
 
 ## Ru / Русский 🇷🇺
 
@@ -53,5 +52,4 @@ API:
   - all_count_bots (counter) Всего ботов
   - count_active_bots (counter) Количество активных ботов
   - average_workload_bots (counter) Средняя нагруженность ботов
-  - active_bot {bot_id} (gauge) Активен ли бот (1 = active, 0 = inactive)
-  - workload_bot {bot_id} (gauge) Загруженность ботов
+  - active_bot {bot_id, name_bot, workload_bot} (gauge) Активен ли бот (1 = active, 0 = inactive)

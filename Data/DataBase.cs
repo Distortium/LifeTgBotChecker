@@ -15,13 +15,91 @@ namespace LifeTgBotChecker.Data
 
         public DataBase(DbContextOptions<DataBase> options) : base(options)
         {
+            try
+            {
+                Database.EnsureCreated();
+
+                // Инициализируем данные
+                InitDB(this);
+            }
+            catch (Exception ex)
+            {
+                // Логируем ошибку
+                Console.WriteLine($"Database initialization error: {ex.Message}");
+            }
+
             _instance = this;
             OnInitEvent?.Invoke(this);
         }
 
-        public async Task AddBot(string token)
+        private void InitDB(DataBase db)
         {
-            await Bots.AddAsync(new BotInDataBase(token));
+            try
+            {
+                try
+                {
+                    if (!db.Settings.Any())
+                    {
+                        var defaultSettings = new SettingsInDataBase
+                        {
+                            TokenCheckerBot = "",
+                            MaxAnswersInSecFromCheckerBot = 10,
+                            MaxGetWorkloadFromBot = 5,
+                            KdMilliSecCheck = 5000,
+                            KdMilliSecCheckAfterFirstCheck = 3000,
+                            KdMilliSecCheckAfterSendMessage = 2000
+                        };
+
+                        db.Settings.Add(defaultSettings);
+                        db.SaveChanges();
+                        Console.WriteLine("Default settings created");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Settings initialization failed (tables might not exist): {ex.Message}");
+                    // Таблицы не существуют, но EnsureCreated уже должен был их создать
+                    // Продолжаем выполнение
+                }
+
+                try
+                {
+                    // Просто проверяем таблицу Bots
+                    var botsCount = db.Bots.Count();
+                    Console.WriteLine($"Bots records count: {botsCount}");
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Bots check failed: {ex.Message}");
+                }
+
+                Console.WriteLine("Database initialization completed");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error during database initialization: {ex.Message}");
+            }
+        }
+
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        {
+            base.OnModelCreating(modelBuilder);
+
+            // Настройка таблицы Settings - гарантируем что будет только одна запись
+            modelBuilder.Entity<SettingsInDataBase>()
+                .HasKey(s => s.Id);
+
+            // Настройка таблицы Bots
+            modelBuilder.Entity<BotInDataBase>()
+                .HasKey(b => b.Token);
+
+            Console.WriteLine("Database model configured");
+        }
+
+        public async Task AddBot(string token, string name = "Бот")
+        {
+            await Bots.AddAsync(new BotInDataBase(token, name));
+            await SaveChangesAsync();
             Console.WriteLine($"Added bot with token {token} in data base");
         }
 
@@ -29,23 +107,30 @@ namespace LifeTgBotChecker.Data
         {
             var findBot = await Bots.FindAsync(token);
             if (findBot != null)
+            {
                 Bots.Remove(findBot);
+                await SaveChangesAsync();
+            }
             Console.WriteLine($"Removed bot with token {token} in data base");
         }
 
         public async Task<SettingsInDataBase?> GetSettings()
         {
             var s = await Settings.FirstOrDefaultAsync();
-            
+
             if (s == null)
-                await Settings.AddAsync(s = new SettingsInDataBase());
-            
+            {
+                s = new SettingsInDataBase();
+                await Settings.AddAsync(s);
+                await SaveChangesAsync();
+            }
+
             return s;
         }
 
         public async Task Save()
         {
-            await this.SaveChangesAsync();
+            await SaveChangesAsync();
             Console.WriteLine($"Successful saving data base");
         }
 
@@ -53,27 +138,32 @@ namespace LifeTgBotChecker.Data
         {
             var jsonClass = new
             {
-                checkerBot = LifeCheckBotsService.CheckerBot!.Token,
+                checkerBot = LifeCheckBotsService.CheckerBot?.Token ?? "not_set",
                 bots = Bots.ToList()
             };
-            string json = JsonSerializer.Serialize(jsonClass, 
-                new JsonSerializerOptions { ReferenceHandler = ReferenceHandler.IgnoreCycles, 
-                    DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull });
+            string json = JsonSerializer.Serialize(jsonClass,
+                new JsonSerializerOptions
+                {
+                    ReferenceHandler = ReferenceHandler.IgnoreCycles,
+                    DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+                });
 
             return json;
         }
 
         public static string? StaticBackup() => _instance?.Backup();
     }
-    
+
     public class BotInDataBase
     {
         [Key]
         public string Token { get; set; }
+        public string Name { get; set; }
 
-        public BotInDataBase(string token)
+        public BotInDataBase(string token, string name)
         {
             Token = token;
+            Name = name;
         }
     }
 
@@ -81,16 +171,15 @@ namespace LifeTgBotChecker.Data
     {
         [Key]
         public int Id { get; set; } = 0;
-        public string TokenCheckerBot { get; set; }
-        public int MaxAnswersInSecFromCheckerBot { get; set; }
-        public int MaxGetWorkloadFromBot { get; set; }
-        public int KdMilliSecCheck { get; set; }
-        public int KdMilliSecCheckAfterFirstCheck { get; set; }
-        public int KdMilliSecCheckAfterSendMessage { get; set; }
+        public string TokenCheckerBot { get; set; } = string.Empty;
+        public int MaxAnswersInSecFromCheckerBot { get; set; } = 10;
+        public int MaxGetWorkloadFromBot { get; set; } = 5;
+        public int KdMilliSecCheck { get; set; } = 5000;
+        public int KdMilliSecCheckAfterFirstCheck { get; set; } = 3000;
+        public int KdMilliSecCheckAfterSendMessage { get; set; } = 2000;
 
         public SettingsInDataBase()
         {
-
         }
     }
 }
