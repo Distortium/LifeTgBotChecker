@@ -49,7 +49,7 @@ namespace LifeTgBotChecker.Data
 
         private void InitDB(DataBase db)
         {
-            DataBase.OnInitEvent -= InitDB;
+            //DataBase.OnInitEvent -= InitDB;
 
             DB = db;
             if (DB != null)
@@ -103,6 +103,8 @@ namespace LifeTgBotChecker.Data
 
         public void RefreshTokenCheckerBot()
         {
+            if (checkerBot != null && checkerBot.Token.Equals(TokenCheckerBot)) return;
+
             try
             {
                 checkerBot = new TelegramBotClient(TokenCheckerBot);
@@ -167,75 +169,98 @@ namespace LifeTgBotChecker.Data
 
             await Task.Delay(KdMilliSecCheckAfterSendMessage);
 
-            int lastCountQueue;
-            foreach (var bot in Bots)
+            using (CancellationTokenSource cts = new())
             {
-                var b = bot.Value;
-                TelegramBotClient botClient;
-                try
+                cts.CancelAfter(KdMilliSecCheckAfterFirstCheck * 2);
+                foreach (var bot in Bots)
                 {
-                    botClient = new TelegramBotClient(b.Token);
+                    CheckBot(bot.Value, cts.Token);
                 }
-                catch
+                await Task.Delay(KdMilliSecCheckAfterSendMessage * 2 + 100);
+                OnUpdateUIEvent?.Invoke();
+            }
+        }
+
+        private async Task CheckBot(Bot? b, CancellationToken token)
+        {
+            if (b == null) return;
+
+            int lastCountQueue;
+            TelegramBotClient? botClient = null;
+            try
+            {
+                botClient = new TelegramBotClient(b.Token);
+            }
+            catch
+            {
+                b.IsLife = false;
+                b.Workload = -1;
+            }
+
+            if (botClient == null)
+                return;
+
+            try
+            {
+                var webhookInfo = await botClient.GetWebhookInfo(token);
+                if (token.IsCancellationRequested) return;
+
+                if (webhookInfo != null)
                 {
-                    b.IsLife = false;
-                    b.Workload = -1;
-                    continue;
-                }
+                    // Бот имеет webhook, нужно отправить кастомный запрос на проверку
 
-                try
-                {
-                    var webhookInfo = await botClient.GetWebhookInfo();
-                    if (!string.IsNullOrEmpty(webhookInfo.Url))
+                    if (webhookInfo.PendingUpdateCount > 0)
                     {
-                        // Бот имеет webhook, нужно отправить кастомный запрос на проверку
-                        
-                        if (webhookInfo.PendingUpdateCount > 0)
-                        {
-                            b.IsLife = false;
-                            lastCountQueue = webhookInfo.PendingUpdateCount;
-
-                            await Task.Delay(KdMilliSecCheckAfterFirstCheck);
-                            webhookInfo = await botClient.GetWebhookInfo();
-                            if (webhookInfo.PendingUpdateCount < lastCountQueue)
-                                b.IsLife = true;
-                        }
-                        else
-                            b.IsLife = true;
-
-                        b.Workload = webhookInfo.PendingUpdateCount;
-                        continue;
-                    }
-
-                    // Проверка, активен ли бот и не забанен
-                    //var me = await botClient.GetMe();
-
-                    // Проверка, слушает ли он сообщения (получение обновлений)
-                    var updates = await botClient.GetUpdates(offset: 0, limit: MaxGetWorkloadFromBot);
-                    if (updates.Length > 0)
-                    {
-                        lastCountQueue = updates.Length;
                         b.IsLife = false;
+                        lastCountQueue = webhookInfo.PendingUpdateCount;
 
-                        await Task.Delay(KdMilliSecCheckAfterFirstCheck);
-                        updates = await botClient.GetUpdates(offset: 0, limit: MaxGetWorkloadFromBot);
-                        if (updates.Length < lastCountQueue)
+                        await Task.Delay(KdMilliSecCheckAfterFirstCheck, token);
+                        if (token.IsCancellationRequested) return;
+                        webhookInfo = await botClient.GetWebhookInfo(token);
+                        if (token.IsCancellationRequested) return;
+
+                        if (webhookInfo.PendingUpdateCount < lastCountQueue)
                             b.IsLife = true;
                     }
                     else
                         b.IsLife = true;
 
-                    b.Workload = updates.Length;
+                    b.Workload = webhookInfo.PendingUpdateCount;
+                    return;
                 }
-                catch (Exception ex)
+
+                // Проверка, активен ли бот и не забанен
+                //var me = await botClient.GetMe();
+
+                // Проверка, слушает ли он сообщения (получение обновлений)
+                var updates = await botClient.GetUpdates(offset: 0, limit: MaxGetWorkloadFromBot, cancellationToken: token);
+                if (token.IsCancellationRequested) return;
+
+                if (updates.Length > 0)
                 {
+                    lastCountQueue = updates.Length;
                     b.IsLife = false;
-                    b.Workload = -1;
-                    Console.WriteLine($"Ошибка: {ex.Message}");
-                    // Возможные причины: бот забанен, токен неверный, сервер недоступен
+
+                    await Task.Delay(KdMilliSecCheckAfterFirstCheck, token);
+                    if (token.IsCancellationRequested) return;
+                    updates = await botClient.GetUpdates(offset: 0, limit: MaxGetWorkloadFromBot, cancellationToken: token);
+                    if (token.IsCancellationRequested) return;
+
+                    if (updates.Length < lastCountQueue)
+                        b.IsLife = true;
                 }
+                else
+                    b.IsLife = true;
+
+                b.Workload = updates.Length;
             }
-            OnUpdateUIEvent?.Invoke();
+            catch (Exception ex)
+            {
+                b.IsLife = false;
+                b.Workload = -1;
+                Console.WriteLine($"Ошибка: {ex.Message}");
+                // Возможные причины: бот забанен, токен неверный, сервер недоступен
+            }
         }
 
         private async Task AddChat(long chatId)
@@ -315,6 +340,8 @@ namespace LifeTgBotChecker.Data
             KdMilliSecCheckAfterSendMessage = settings.KdMilliSecCheckAfterSendMessage;
             TokenCheckerBot = settings.TokenCheckerBot;
             Console.WriteLine("Load settings from data base");
+
+            RefreshTokenCheckerBot();
         }
     }
 }

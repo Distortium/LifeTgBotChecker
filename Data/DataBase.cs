@@ -1,4 +1,5 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
 using System.ComponentModel.DataAnnotations;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -136,11 +137,7 @@ namespace LifeTgBotChecker.Data
 
         public string Backup()
         {
-            var jsonClass = new
-            {
-                checkerBot = LifeCheckBotsService.CheckerBot?.Token ?? "not_set",
-                bots = Bots.ToList()
-            };
+            JsonDataBots jsonClass = new(LifeCheckBotsService.CheckerBot?.Token ?? "not_set", Bots.ToList());
             string json = JsonSerializer.Serialize(jsonClass,
                 new JsonSerializerOptions
                 {
@@ -149,6 +146,24 @@ namespace LifeTgBotChecker.Data
                 });
 
             return json;
+        }
+
+        public async Task InputBackup(string json)
+        {
+            var outputClass = JsonSerializer.Deserialize<JsonDataBots>(json);
+            if (outputClass != null)
+            {
+                await Database.ExecuteSqlRawAsync("DELETE FROM Bots");
+                if (outputClass.Bots != null)
+                    await Bots.AddRangeAsync(outputClass.Bots);
+                var settings = await GetSettings();
+                if (settings != null)
+                    settings.TokenCheckerBot = outputClass.CheckerBot;
+                await SaveChangesAsync();
+                OnInitEvent?.Invoke(this);
+                Console.WriteLine("Success deserialize file and import data base");
+            }
+            else Console.WriteLine("Cant deserialize file");
         }
 
         public static string? StaticBackup() => _instance?.Backup();
@@ -180,6 +195,21 @@ namespace LifeTgBotChecker.Data
 
         public SettingsInDataBase()
         {
+        }
+    }
+
+    [System.Serializable]
+    public class JsonDataBots
+    {
+        [JsonInclude]
+        public string CheckerBot;
+        [JsonInclude]
+        public List<BotInDataBase> Bots;
+
+        public JsonDataBots(string checkerBot, List<BotInDataBase> bots)
+        {
+            CheckerBot = checkerBot;
+            Bots = bots;
         }
     }
 }
