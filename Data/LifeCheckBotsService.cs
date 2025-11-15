@@ -18,6 +18,7 @@ namespace LifeTgBotChecker.Data
 
         // Storages for check bots
         public Dictionary<string, Bot> Bots = new();
+        private readonly Dictionary<string, TelegramBotClient> botClients = new();
         public Dictionary<long, int> ChatIds = new();
         public Dictionary<long, int> TempChatIds = new();
         public DataBase? DB { get; set; }
@@ -70,7 +71,7 @@ namespace LifeTgBotChecker.Data
                     name = "Бот";
                     try
                     {
-                        botClient = new TelegramBotClient(token);
+                        botClient = GetOrCreateBotClient(token);
                         var me = await botClient.GetMe();
                         if (me.Username != null)
                             name = me.Username;
@@ -90,13 +91,11 @@ namespace LifeTgBotChecker.Data
 
         public void RemoveBot(string token)
         {
-            if (Bots.ContainsKey(token))
+            if (Bots.Remove(token))
             {
-                Bots.Remove(token);
-                OnUpdateUIEvent?.Invoke();
+                botClients.Remove(token);
 
-                if (DB == null)
-                    Console.WriteLine($"Removed bot with token {token}");
+                OnUpdateUIEvent?.Invoke();
                 DB?.RemoveBot(token);
             }
         }
@@ -187,14 +186,16 @@ namespace LifeTgBotChecker.Data
 
             int lastCountQueue;
             TelegramBotClient? botClient = null;
+
             try
             {
-                botClient = new TelegramBotClient(b.Token);
+                botClient = GetOrCreateBotClient(b.Token);
             }
             catch
             {
                 b.IsLife = false;
                 b.Workload = -1;
+                return;
             }
 
             if (botClient == null)
@@ -233,7 +234,7 @@ namespace LifeTgBotChecker.Data
                 //var me = await botClient.GetMe();
 
                 // Проверка, слушает ли он сообщения (получение обновлений)
-                var updates = await botClient.GetUpdates(offset: 0, limit: MaxGetWorkloadFromBot, cancellationToken: token);
+                var updates = await botClient.GetUpdates(offset: -1, limit: Math.Min(MaxGetWorkloadFromBot, 10), cancellationToken: token);
                 if (token.IsCancellationRequested) return;
 
                 if (updates.Length > 0)
@@ -243,7 +244,7 @@ namespace LifeTgBotChecker.Data
 
                     await Task.Delay(KdMilliSecCheckAfterFirstCheck, token);
                     if (token.IsCancellationRequested) return;
-                    updates = await botClient.GetUpdates(offset: 0, limit: MaxGetWorkloadFromBot, cancellationToken: token);
+                    updates = await botClient.GetUpdates(offset: -1, limit: Math.Min(MaxGetWorkloadFromBot, 10), cancellationToken: token);
                     if (token.IsCancellationRequested) return;
 
                     if (updates.Length < lastCountQueue)
@@ -261,6 +262,16 @@ namespace LifeTgBotChecker.Data
                 Console.WriteLine($"Ошибка: {ex.Message}");
                 // Возможные причины: бот забанен, токен неверный, сервер недоступен
             }
+        }
+
+        private TelegramBotClient GetOrCreateBotClient(string token)
+        {
+            if (!botClients.TryGetValue(token, out TelegramBotClient? value))
+            {
+                value = new TelegramBotClient(token);
+                botClients[token] = value;
+            }
+            return value;
         }
 
         private async Task AddChat(long chatId)
@@ -324,7 +335,7 @@ namespace LifeTgBotChecker.Data
         private void LoadBots(IEnumerable<BotInDataBase> bots)
         {
             foreach (var bot in bots)
-                Bots.Add(bot.Token, new Bot(bot.Token, bot.Name));
+                Bots.TryAdd(bot.Token, new Bot(bot.Token, bot.Name));
         }
 
         // Загрузка настроек из БД
