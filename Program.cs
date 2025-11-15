@@ -1,4 +1,4 @@
-using LifeTgBotChecker.Data;
+п»їusing LifeTgBotChecker.Data;
 using Microsoft.EntityFrameworkCore;
 using System.Text.Json;
 
@@ -28,11 +28,11 @@ namespace LifeTgBotChecker
                 var db = scope.ServiceProvider.GetRequiredService<DataBase>();
                 try
                 {
-                    // Принудительно создаем базу данных если ее нет
+                    // РџСЂРёРЅСѓРґРёС‚РµР»СЊРЅРѕ СЃРѕР·РґР°РµРј Р±Р°Р·Сѓ РґР°РЅРЅС‹С… РµСЃР»Рё РµРµ РЅРµС‚
                     var created = db.Database.EnsureCreated();
                     Console.WriteLine($"Database ensured created on startup: {created}");
 
-                    // Проверяем соединение
+                    // РџСЂРѕРІРµСЂСЏРµРј СЃРѕРµРґРёРЅРµРЅРёРµ
                     var canConnect = db.Database.CanConnect();
                     Console.WriteLine($"Database can connect: {canConnect}");
                 }

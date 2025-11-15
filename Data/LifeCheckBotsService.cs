@@ -50,7 +50,7 @@ namespace LifeTgBotChecker.Data
 
         private void InitDB(DataBase db)
         {
-            //DataBase.OnInitEvent -= InitDB;
+            // DataBase.OnInitEvent -= InitDB;
 
             DB = db;
             if (DB != null)
@@ -106,7 +106,7 @@ namespace LifeTgBotChecker.Data
 
             try
             {
-                checkerBot = new TelegramBotClient(TokenCheckerBot);
+                checkerBot = GetOrCreateBotClient(TokenCheckerBot);
             }
             catch (Exception)
             {

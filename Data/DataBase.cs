@@ -12,25 +12,32 @@ namespace LifeTgBotChecker.Data
         public DbSet<SettingsInDataBase> Settings { get; set; }
 
         private static DataBase? _instance;
+        private static bool isInitialized = false;
         public static event Action<DataBase>? OnInitEvent;
 
         public DataBase(DbContextOptions<DataBase> options) : base(options)
         {
-            try
+            if (!isInitialized)
             {
-                Database.EnsureCreated();
+                try
+                {
+                    Database.EnsureCreated();
 
-                // Инициализируем данные
-                InitDB(this);
-            }
-            catch (Exception ex)
-            {
-                // Логируем ошибку
-                Console.WriteLine($"Database initialization error: {ex.Message}");
+                    // Инициализируем данные
+                    InitDB(this);
+                    isInitialized = true;
+                }
+                catch (Exception ex)
+                {
+                    // Логируем ошибку
+                    Console.WriteLine($"Database initialization error: {ex.Message}");
+                }
             }
 
             _instance = this;
-            OnInitEvent?.Invoke(this);
+
+            if (isInitialized)
+                OnInitEvent?.Invoke(this);
         }
 
         private void InitDB(DataBase db)
@@ -123,7 +130,7 @@ namespace LifeTgBotChecker.Data
             {
                 s = new SettingsInDataBase();
                 await Settings.AddAsync(s);
-                await SaveChangesAsync();
+                //await SaveChangesAsync();
             }
 
             return s;
